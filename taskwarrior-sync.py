@@ -8,29 +8,30 @@ The sequence for syncing are:
 4. Push
 '''
 
+from turtle import update
 import requests
 import json
 import os
 import subprocess
 from pathlib import Path
 
-# try:
-#     token=os.environ['PLEASE_SYNC_TOKEN']
-# except:
-#     print("Error: Export PLEASE_SYNC_TOKEN with your Gist access token")
-#     exit()
+try:
+    token=os.environ['TASK_SYNC_TOKEN']
+except:
+    print("Error: Export PLEASE_SYNC_TOKEN with your Gist access token")
+    exit()
 
-# try:
-#     gist_id=os.environ['PLEASE_GIST_ID']
-# except:
-#     print("Error: Export PLEASE_GIST_ID with your Gist ID")
-#     exit()
+try:
+    gist_id=os.environ['TASK_GIST_ID']
+except:
+    print("Error: Export PLEASE_GIST_ID with your Gist ID")
+    exit()
 
-# try:
-#     PGP_ID = os.environ['PLEASE_RECIPIENT_ID']
-# except:
-#     print("Error: Export PLEASE_RECIPIENT_ID with your Gist ID")
-#     exit()
+try:
+    PGP_ID = os.environ['TASK_USER_ID']
+except:
+    print("Error: Export TASK_USER_ID with your PGP ID")
+    exit()
 
 HOME = str(Path.home()) + "/"
 TASK_FOLDER = HOME + ".task"
@@ -38,6 +39,7 @@ TASK_CONFIG = HOME + ".taskrc"
 TMP = "/tmp/"
 PACKED_CONFIG = "taskConfig.tar.gz"
 PACKED_CONFIG_DECRYPTED = "taskConfig_dec.tar.gz"
+GIST_FILENAME = "task-sync.json"
 
 ## Compress file and folder via tar -czf task.tar.gz TASK_CONFIG TASK_FOLDER
 def packConfig():
@@ -52,21 +54,21 @@ def packConfig():
     print(r.stdout)
 
 ## Encrypt the package
-def encryptConfig( pgpid, file ):
+def encryptConfig():
     r = subprocess.run(args=[ "gpg",
                           "--recipient",
-                          pgpid,
+                          PGP_ID,
                           "--encrypt",
                           "--armor",
                           "--output",
                           "-",
-                          file ],
+                          TMP + PACKED_CONFIG ],
                   universal_newlines = True,
                   stdout = subprocess.PIPE )
     print(r.stdout)
     return r.stdout
 
-def decryptConfig( pgpid, input ):
+def decryptConfig( input ):
     # decrypt the data and overwrite local data
     echo_r = subprocess.Popen(('echo', input), stdout=subprocess.PIPE)
     decrypt_r = subprocess.Popen(('gpg', '--decrypt'), stdin=echo_r.stdout, stdout=subprocess.PIPE)
@@ -100,19 +102,21 @@ def getGist():
 def updateGist( content ):
     # content=open(filename, 'r').read()
     headers = {'Authorization': f'token {token}'}
-    r = requests.patch('https://api.github.com/gists/' + gist_id, data=json.dumps({'files':{filename:{"content":content}}}),headers=headers) 
+    r = requests.patch('https://api.github.com/gists/' + gist_id, data=json.dumps({'files':{GIST_FILENAME:{"content":content}}}),headers=headers) 
     #print(r.json())
 
 packConfig()
 
-data = encryptConfig( 'zulhilmi.ramli@outlook.my', TMP + PACKED_CONFIG )
+data = encryptConfig()
 packedJson = packJson( data )
 
-# Load the JSON as JSON Object
-packedJsonObj = json.loads(packedJson)
-data_remote = str(packedJsonObj['data']).replace("\\n","\n")
+updateGist(packedJson)
 
-decryptConfig( 'zulhilmi.ramli@outlook.my', data_remote )
+# Load the JSON as JSON Object
+# packedJsonObj = json.loads(packedJson)
+# data_remote = str(packedJsonObj['data']).replace("\\n","\n")
+
+# decryptConfig( 'zulhilmi.ramli@outlook.my', data_remote )
 
 # # Get local config information. Drop ms and ns from epoch value
 # m_time_local = int(str(os.path.getmtime(home + please_config_path)).split('.',1)[0])
