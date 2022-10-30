@@ -8,6 +8,7 @@ The sequence for syncing are:
 4. Push
 '''
 
+from datetime import datetime
 import requests
 import json
 import os
@@ -41,6 +42,10 @@ TMP = "/tmp/"
 PACKED_CONFIG = "taskConfig.tar.gz"
 PACKED_CONFIG_DECRYPTED = "taskConfig_dec.tar.gz"
 GIST_FILENAME = "task-sync.json"
+BACKLOG_TASK = TASK_FOLDER + "/backlog.data"
+COMPLETED_TASK = TASK_FOLDER + "/completed.data"
+PENDING_TASK = TASK_FOLDER + "/pending.data"
+UNDO_TASK = TASK_FOLDER + "/undo.data"
 
 
 ## Compress file and folder via tar -czf task.tar.gz TASK_CONFIG TASK_FOLDER
@@ -124,6 +129,47 @@ def updateGist( content ):
     r = requests.patch('https://api.github.com/gists/' + GIST_ID, data=json.dumps({'files':{GIST_FILENAME:{"content":content}}}),headers=headers) 
     #print(r.json())
 
+## Using file modified as indicator more recent file is not reliable as if 
+#   we just did sync, the file modified will be more recent than the one
+#   from Gist. Instead, we check all list, get the last entry each,
+#   get the modified value. Any copy that has more recent modified most
+#   like is the latest one
+def checkVersion():
+    # Check completed, backlog, pending and undo both remote and local
+    # Get the last entry
+    # Get the modified value from both and compare
+    print("Version checked")
+
+def getLastLine( inputFile ):
+    file = open( inputFile, 'r' )
+    lines = file.readlines()
+    for line in lines:
+        lastLine = line
+    return lastLine
+
+def getModified( inputJSON ):
+    # Build JSON Object
+    jData = json.loads(inputJSON)
+    return jData['modified'].replace( "T", "" ).replace( "Z", "" )
+
+def getLatestModified():
+    # Get each file last line
+    backlogLastLine = getLastLine( BACKLOG_TASK )
+    backlogLatestModified = getModified( backlogLastLine )
+    print(backlogLatestModified)
+
+    completedLastLine = getLastLine( COMPLETED_TASK )
+    completedLatestModified = getModified( completedLastLine )
+    print(completedLatestModified)
+
+    pendingLastLine = getLastLine( PENDING_TASK )
+    pendingLatestModified = getModified( pendingLastLine )
+    print(pendingLatestModified)
+    
+    # undoLastLine = getLastLine( UNDO_TASK )
+    # undoLatestModified = getModified( undoLastLine )
+    # print(undoLatestModified)
+
 
 parser = argparse.ArgumentParser(description='Simple Task Warrior task sync. Uses Github as storage and PGP as encryption')
 parser.add_argument('--push', action="store_true", help='Push config and task data to Gist')
@@ -151,3 +197,5 @@ if args.pull:
     decryptConfig(remoteConfigData)
     # Unpack
     unpackConfig()
+
+getLatestModified()
