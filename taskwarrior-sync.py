@@ -15,6 +15,7 @@ import os
 import subprocess
 from pathlib import Path
 import argparse
+import re
 
 ## Check for required variable. Since most of it sensitive, user must set it up
 try:
@@ -104,7 +105,7 @@ def packJson( input ):
     print("Packing config to JSON format...")
     # Build JSON object
     packedData = {}
-    packedData['modified'] = 0
+    packedData['modified'] = getLatestModified()
     packedData['data'] = input.replace("\n", "\\n")
 
     # Build JSON Object
@@ -140,6 +141,7 @@ def checkVersion():
     # Get the modified value from both and compare
     print("Version checked")
 
+# Get last line of each file
 def getLastLine( inputFile ):
     file = open( inputFile, 'r' )
     lines = file.readlines()
@@ -147,28 +149,43 @@ def getLastLine( inputFile ):
         lastLine = line
     return lastLine
 
-def getModified( inputJSON ):
+# Only backlog file use proper JSON
+# Return Epoch in integer type
+def getModifiedBacklog( inputJSON ):
     # Build JSON Object
     jData = json.loads(inputJSON)
-    return jData['modified'].replace( "T", "" ).replace( "Z", "" )
+    # Backlog uses ISO8601 date format, but not quite. Need to append few thing before it compliance
+    modified = jData['modified']
+    modified = modified[:4] + "-" + modified[4:6] + "-" + modified[6:11] + ":" + modified[11:13] + ":" + modified[13:]
+    utc_dt = datetime.strptime( modified, '%Y-%m-%dT%H:%M:%SZ' )
+    timestamp = (utc_dt - datetime(1970, 1, 1)).total_seconds()
+    return int(timestamp)
 
+# Get modified epoch for other file
+def getModified( inputString ):
+    # Build JSON Object
+    output = re.search("modified:\"(.*)\" status", inputString )
+    # print(output[1])
+    return int(output[1])
+
+# Return most recent timestamp
 def getLatestModified():
     # Get each file last line
     backlogLastLine = getLastLine( BACKLOG_TASK )
-    backlogLatestModified = getModified( backlogLastLine )
-    print(backlogLatestModified)
+    backlogLatestModified = getModifiedBacklog( backlogLastLine )
+    # print(backlogLatestModified)
 
     completedLastLine = getLastLine( COMPLETED_TASK )
     completedLatestModified = getModified( completedLastLine )
-    print(completedLatestModified)
+    # print(completedLatestModified)
 
     pendingLastLine = getLastLine( PENDING_TASK )
     pendingLatestModified = getModified( pendingLastLine )
-    print(pendingLatestModified)
+    # print(pendingLatestModified)
     
-    # undoLastLine = getLastLine( UNDO_TASK )
-    # undoLatestModified = getModified( undoLastLine )
-    # print(undoLatestModified)
+    allModified = [ backlogLatestModified, completedLatestModified, pendingLatestModified]
+
+    return max(allModified)
 
 
 parser = argparse.ArgumentParser(description='Simple Task Warrior task sync. Uses Github as storage and PGP as encryption')
@@ -188,14 +205,33 @@ if args.push:
 if args.pull:
     # print('Pull')
     ## Pull Config
+    confirmPull = False
     # Get gist, in JSON
     remoteGistData = getGist()
     # Get the content, in encrypted state, and convert into json object
     remoteGistContent = json.loads(remoteGistData['files'][GIST_FILENAME]['content'])
-    # Get remote content
-    remoteConfigData = str(remoteGistContent['data']).replace("\\n","\n")
-    decryptConfig(remoteConfigData)
-    # Unpack
-    unpackConfig()
+    # Get local data timestamp
+    localModified = getLatestModified()
+    remoteModified = int(remoteGistContent['modified'])
+    if localModified > remoteModified:
+        # Local newer than remote, ask user to continue or not
+        localTime = datetime.fromtimestamp(localModified)
+        remoteTime = datetime.fromtimestamp(remoteModified)
+        print("Local copy timestamp: " + str(localTime))
+        print("Remote copy timestamp: " + str(remoteTime))
+        userInput = input("Local copy is newer than remote. Proceed pulling? [y/N]: ")
+        if userInput == 'y':
+            confirmPull = True
+        else:
+            print("Pull canceled")
+    
+    if confirmPull:
+        # Get remote content
+        remoteConfigData = str(remoteGistContent['data']).replace("\\n","\n")
+        decryptConfig(remoteConfigData)
+        # Unpack
+        unpackConfig()
+        print("Pull completed")
 
-getLatestModified()
+# maxMod = getLatestModified()
+# print(maxMod)
