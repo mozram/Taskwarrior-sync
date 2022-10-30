@@ -101,11 +101,11 @@ def decryptConfig( input ):
     write_r.wait()
     # print(decrypt_r.stdout)s
 
-def packJson( input ):
+def packJson( input, timestamp ):
     print("Packing config to JSON format...")
     # Build JSON object
     packedData = {}
-    packedData['modified'] = getLatestModified()
+    packedData['modified'] = timestamp
     packedData['data'] = input.replace("\n", "\\n")
 
     # Build JSON Object
@@ -116,11 +116,13 @@ def packJson( input ):
 
 ## Get gist
 def getGist():
-    print("Pulling config from GIST...")
+    print("Fetching config from GIST...")
     headers = {'Authorization': f'token {GIST_ACCESS_TOKEN}'}
     r = requests.get('https://api.github.com/gists/' + GIST_ID, headers=headers) 
     # print(r.json())
-    return r.json()
+    jsonData = r.json()
+
+    return json.loads(jsonData['files'][GIST_FILENAME]['content'])
 
 ## Update gist
 def updateGist( content ):
@@ -170,6 +172,7 @@ def getModified( inputString ):
 
 # Return most recent timestamp
 def getLatestModified():
+    print("Get latest modified timestamp...")
     # Get each file last line
     backlogLastLine = getLastLine( BACKLOG_TASK )
     backlogLatestModified = getModifiedBacklog( backlogLastLine )
@@ -197,22 +200,44 @@ args = parser.parse_args()
 if args.push:
     # print('Push')
     ## Push Config
-    packConfig()
-    data = encryptConfig()
-    packedJson = packJson( data )
-    updateGist(packedJson)
+    confirmPush = False
+    # Check local version vs remote
+    remoteGistContent = getGist()
+    # Get local data timestamp
+    localModified = getLatestModified()
+    remoteModified = int(remoteGistContent['modified'])
+    print("Comparing local and remote config...")
+    if remoteModified > localModified:
+        # Remote config is newer. Pushing may cause data loss
+        remoteTime = datetime.fromtimestamp(remoteModified)
+        localTime = datetime.fromtimestamp(localModified)
+        userInput = input("Remote copy is newer than local. Proceed pushing? [y/N]: ")
+        if userInput == 'y':
+            confirmPush = True
+        else:
+            print("Push canceled")
+    else:
+        # If local is newer, push the config
+        print("No conflict...")
+        confirmPush = True
+
+    if confirmPush:
+        packConfig()
+        data = encryptConfig()
+        packedJson = packJson( data, localModified )
+        updateGist(packedJson)
+
 
 if args.pull:
     # print('Pull')
     ## Pull Config
     confirmPull = False
     # Get gist, in JSON
-    remoteGistData = getGist()
-    # Get the content, in encrypted state, and convert into json object
-    remoteGistContent = json.loads(remoteGistData['files'][GIST_FILENAME]['content'])
+    remoteGistContent = getGist()
     # Get local data timestamp
     localModified = getLatestModified()
     remoteModified = int(remoteGistContent['modified'])
+    print("Comparing local and remote config...")
     if localModified > remoteModified:
         # Local newer than remote, ask user to continue or not
         localTime = datetime.fromtimestamp(localModified)
@@ -224,6 +249,9 @@ if args.pull:
             confirmPull = True
         else:
             print("Pull canceled")
+    else:
+        print("No conflict...")
+        confirmPull = True
     
     if confirmPull:
         # Get remote content
