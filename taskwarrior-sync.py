@@ -16,6 +16,8 @@ import subprocess
 from pathlib import Path
 import argparse
 import re
+import asyncio
+from asyncinotify import Inotify, Mask
 
 ## Check for required variable. Since most of it sensitive, user must set it up
 try:
@@ -239,6 +241,7 @@ parser = argparse.ArgumentParser(description='Simple Task Warrior task sync. Use
 parser.add_argument('--push', action="store_true", help='Push config and task data to Gist')
 parser.add_argument('--pull', action="store_true", help='Pull config and task data to Gist')
 parser.add_argument('--sync', action="store_true", help='Sync the config')
+parser.add_argument('--daemon', action="store_true", help='Run as Sync daemon')
 
 args = parser.parse_args()
 
@@ -264,7 +267,6 @@ if args.push:
 
     if confirmPush:
         push( localModified )
-
 
 if args.pull:
     # print('Pull config')
@@ -304,6 +306,34 @@ if args.sync:
     else:
         print("No changes...")
 
+if args.daemon:
+    print("Running in daemon mode...")
+    # Initialize inotify to watch config folder
+    # Wait for any changes. If changes detected, execute sync above.
+    # Repeat
+    async def main():
+        # Context manager to close the inotify handle after use
+        with Inotify() as inotify:
+            # Adding the watch can also be done outside of the context manager.
+            # __enter__ doesn't actually do anything except return self.
+            # This returns an asyncinotify.inotify.Watch instance
+            inotify.add_watch( TASK_FOLDER, Mask.MODIFY | Mask.CREATE | Mask.DELETE )
+            # Iterate events forever, yielding them one at a time
+            async for event in inotify:
+                # Events have a helpful __repr__.  They also have a reference to
+                # their Watch instance.
+                print(event)
+
+                # the contained path may or may not be valid UTF-8.  See the note
+                # below
+                print(repr(event.path))
+
+    # loop = asyncio.new_event_loop()
+    # asyncio.set_event_loop(loop)
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print('Shutting down daemon...')
 
 # maxMod = getLatestModified()
 # print(maxMod)
