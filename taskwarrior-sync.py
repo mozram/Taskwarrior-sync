@@ -260,6 +260,8 @@ def sync():
         else:
             print("No changes...")
         sync_running = False
+    # TODO: Send notification. On WSL2, use https://github.com/vaskovsky/notify-send
+    # TODO: How to detect running on WSL2 or Native linux
 
 parser = argparse.ArgumentParser(description='Simple Task Warrior task sync. Uses Github as storage and PGP as encryption')
 parser.add_argument('--push', action="store_true", help='Push config and task data to Gist')
