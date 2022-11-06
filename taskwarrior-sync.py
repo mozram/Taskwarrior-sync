@@ -48,6 +48,10 @@ COMPLETED_TASK = TASK_FOLDER + "/completed.data"
 PENDING_TASK = TASK_FOLDER + "/pending.data"
 UNDO_TASK = TASK_FOLDER + "/undo.data"
 
+# Temporary enumeration of status
+STATUS_NO_CHANGES = 0
+STATUS_LOCAL_NEWER = 1
+STATUS_REMOTE_NEWER = 2
 
 ## Compress file and folder via tar -czf task.tar.gz TASK_CONFIG TASK_FOLDER
 def packConfig():
@@ -190,24 +194,41 @@ def getLatestModified():
 
     return max(allModified)
 
+def compareModifiedTime():
+    # Status variable
+    status = STATUS_NO_CHANGES
+    # Pull remote data
+    remoteGistContent = getGist()
+    # Get remote modified time
+    print("Extracting remote content...")
+    remoteModified = int(remoteGistContent['modified'])
+    # Get local modified time
+    localModified = getLatestModified()
+    # Compare time
+    print("Comparing local and remote config...")
+    if remoteModified > localModified:
+        print("Remote config newer than local...")
+        status = STATUS_REMOTE_NEWER
+    elif localModified > remoteModified:
+        print("Local config newer than remote...")
+        status = STATUS_LOCAL_NEWER
+
+    return status, localModified, remoteModified, remoteGistContent
+
 
 parser = argparse.ArgumentParser(description='Simple Task Warrior task sync. Uses Github as storage and PGP as encryption')
 parser.add_argument('--push', action="store_true", help='Push config and task data to Gist')
 parser.add_argument('--pull', action="store_true", help='Pull config and task data to Gist')
+parser.add_argument('--sync', action="store_true", help='Sync the config')
 
 args = parser.parse_args()
 
 if args.push:
-    # print('Push')
-    ## Push Config
+    # print('Push config')
     confirmPush = False
-    # Check local version vs remote
-    remoteGistContent = getGist()
-    # Get local data timestamp
-    localModified = getLatestModified()
-    remoteModified = int(remoteGistContent['modified'])
-    print("Comparing local and remote config...")
-    if remoteModified > localModified:
+
+    compareStatus, localModified, remoteModified, remoteGistContent = compareModifiedTime()
+    if compareStatus == STATUS_REMOTE_NEWER:
         # Remote config is newer. Pushing may cause data loss
         remoteTime = datetime.fromtimestamp(remoteModified)
         localTime = datetime.fromtimestamp(localModified)
@@ -216,6 +237,8 @@ if args.push:
             confirmPush = True
         else:
             print("Push canceled")
+    elif compareStatus == STATUS_NO_CHANGES:
+        print("No changes...")
     else:
         # If local is newer, push the config
         print("No conflict...")
@@ -229,16 +252,11 @@ if args.push:
 
 
 if args.pull:
-    # print('Pull')
-    ## Pull Config
+    # print('Pull config')
     confirmPull = False
-    # Get gist, in JSON
-    remoteGistContent = getGist()
-    # Get local data timestamp
-    localModified = getLatestModified()
-    remoteModified = int(remoteGistContent['modified'])
-    print("Comparing local and remote config...")
-    if localModified > remoteModified:
+
+    compareStatus, localModified, remoteModified, remoteGistContent = compareModifiedTime()
+    if compareStatus == STATUS_LOCAL_NEWER:
         # Local newer than remote, ask user to continue or not
         localTime = datetime.fromtimestamp(localModified)
         remoteTime = datetime.fromtimestamp(remoteModified)
@@ -249,6 +267,8 @@ if args.pull:
             confirmPull = True
         else:
             print("Pull canceled")
+    elif compareStatus == STATUS_NO_CHANGES:
+        print("No changes...")
     else:
         print("No conflict...")
         confirmPull = True
@@ -260,6 +280,16 @@ if args.pull:
         # Unpack
         unpackConfig()
         print("Pull completed")
+
+if args.sync:
+    print("Running automatic sync...")
+    # Compare local and remote modified
+    compareStatus, localModified, remoteModified, remoteGistContent = compareModifiedTime()
+    # Do some comparison logic
+    if compareStatus == STATUS_LOCAL_NEWER:
+        # Push
+        print("Pushing config...")
+
 
 # maxMod = getLatestModified()
 # print(maxMod)
