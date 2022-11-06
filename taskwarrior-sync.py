@@ -215,6 +215,25 @@ def compareModifiedTime():
 
     return status, localModified, remoteModified, remoteGistContent
 
+def push( localModified ):
+    packConfig()
+    data = encryptConfig()
+    packedJson = packJson( data, localModified )
+    updateGist(packedJson)
+
+def pull( remoteGistContent ):
+    # Get remote content
+    remoteConfigData = str(remoteGistContent['data']).replace("\\n","\n")
+    decryptConfig(remoteConfigData)
+    # Unpack
+    unpackConfig()
+    print("Pull completed")
+
+def printDiff( localModified, remoteModified ):
+    localTime = datetime.fromtimestamp(localModified)
+    remoteTime = datetime.fromtimestamp(remoteModified)
+    print("Local copy timestamp: " + str(localTime))
+    print("Remote copy timestamp: " + str(remoteTime))
 
 parser = argparse.ArgumentParser(description='Simple Task Warrior task sync. Uses Github as storage and PGP as encryption')
 parser.add_argument('--push', action="store_true", help='Push config and task data to Gist')
@@ -230,8 +249,7 @@ if args.push:
     compareStatus, localModified, remoteModified, remoteGistContent = compareModifiedTime()
     if compareStatus == STATUS_REMOTE_NEWER:
         # Remote config is newer. Pushing may cause data loss
-        remoteTime = datetime.fromtimestamp(remoteModified)
-        localTime = datetime.fromtimestamp(localModified)
+        printDiff( localModified, remoteModified )
         userInput = input("Remote copy is newer than local. Proceed pushing? [y/N]: ")
         if userInput == 'y':
             confirmPush = True
@@ -245,10 +263,7 @@ if args.push:
         confirmPush = True
 
     if confirmPush:
-        packConfig()
-        data = encryptConfig()
-        packedJson = packJson( data, localModified )
-        updateGist(packedJson)
+        push( localModified )
 
 
 if args.pull:
@@ -258,10 +273,7 @@ if args.pull:
     compareStatus, localModified, remoteModified, remoteGistContent = compareModifiedTime()
     if compareStatus == STATUS_LOCAL_NEWER:
         # Local newer than remote, ask user to continue or not
-        localTime = datetime.fromtimestamp(localModified)
-        remoteTime = datetime.fromtimestamp(remoteModified)
-        print("Local copy timestamp: " + str(localTime))
-        print("Remote copy timestamp: " + str(remoteTime))
+        printDiff( localModified, remoteModified )
         userInput = input("Local copy is newer than remote. Proceed pulling? [y/N]: ")
         if userInput == 'y':
             confirmPull = True
@@ -274,12 +286,7 @@ if args.pull:
         confirmPull = True
     
     if confirmPull:
-        # Get remote content
-        remoteConfigData = str(remoteGistContent['data']).replace("\\n","\n")
-        decryptConfig(remoteConfigData)
-        # Unpack
-        unpackConfig()
-        print("Pull completed")
+        pull( remoteGistContent )
 
 if args.sync:
     print("Running automatic sync...")
@@ -289,6 +296,13 @@ if args.sync:
     if compareStatus == STATUS_LOCAL_NEWER:
         # Push
         print("Pushing config...")
+        push( localModified )
+    elif compareStatus == STATUS_REMOTE_NEWER:
+        # Pull
+        print("Pulling config...")
+        pull( remoteGistContent )
+    else:
+        print("No changes...")
 
 
 # maxMod = getLatestModified()
