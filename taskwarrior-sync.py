@@ -18,6 +18,7 @@ import argparse
 import re
 import asyncio
 from asyncinotify import Inotify, Mask
+from threading import Timer
 
 ## Check for required variable. Since most of it sensitive, user must set it up
 try:
@@ -222,6 +223,7 @@ def push( localModified ):
     data = encryptConfig()
     packedJson = packJson( data, localModified )
     updateGist(packedJson)
+    print("Push completed")
 
 def pull( remoteGistContent ):
     # Get remote content
@@ -236,6 +238,28 @@ def printDiff( localModified, remoteModified ):
     remoteTime = datetime.fromtimestamp(remoteModified)
     print("Local copy timestamp: " + str(localTime))
     print("Remote copy timestamp: " + str(remoteTime))
+
+sync_running = False
+
+def sync():
+    global sync_running
+    if sync_running == False:
+        sync_running = True
+        print("Running automatic sync...")
+        # Compare local and remote modified
+        compareStatus, localModified, remoteModified, remoteGistContent = compareModifiedTime()
+        # Do some comparison logic
+        if compareStatus == STATUS_LOCAL_NEWER:
+            # Push
+            print("Pushing config...")
+            push( localModified )
+        elif compareStatus == STATUS_REMOTE_NEWER:
+            # Pull
+            print("Pulling config...")
+            pull( remoteGistContent )
+        else:
+            print("No changes...")
+        sync_running = False
 
 parser = argparse.ArgumentParser(description='Simple Task Warrior task sync. Uses Github as storage and PGP as encryption')
 parser.add_argument('--push', action="store_true", help='Push config and task data to Gist')
@@ -291,20 +315,7 @@ if args.pull:
         pull( remoteGistContent )
 
 if args.sync:
-    print("Running automatic sync...")
-    # Compare local and remote modified
-    compareStatus, localModified, remoteModified, remoteGistContent = compareModifiedTime()
-    # Do some comparison logic
-    if compareStatus == STATUS_LOCAL_NEWER:
-        # Push
-        print("Pushing config...")
-        push( localModified )
-    elif compareStatus == STATUS_REMOTE_NEWER:
-        # Pull
-        print("Pulling config...")
-        pull( remoteGistContent )
-    else:
-        print("No changes...")
+    sync()
 
 if args.daemon:
     print("Running in daemon mode...")
@@ -313,6 +324,10 @@ if args.daemon:
     # Repeat
     async def main():
         # Context manager to close the inotify handle after use
+
+        ## Create timer object
+        t = Timer( 2.0, sync )
+
         with Inotify() as inotify:
             # Adding the watch can also be done outside of the context manager.
             # __enter__ doesn't actually do anything except return self.
@@ -326,7 +341,13 @@ if args.daemon:
 
                 # the contained path may or may not be valid UTF-8.  See the note
                 # below
-                print(repr(event.path))
+                # print(repr(event.path))
+
+                # Stop timer
+                t.cancel()
+                # Start timer
+                t = Timer( 2.0, sync )
+                t.start()
 
     # loop = asyncio.new_event_loop()
     # asyncio.set_event_loop(loop)
