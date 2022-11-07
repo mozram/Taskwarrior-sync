@@ -6,8 +6,9 @@ Alternative to Taskd by Taskwarrior. Using simpler method than Taskd, but as sec
 [+] Secure sync via PGP<br>
 [+] Store data in Git Gist<br>
 [+] Very easy to setup<br>
+[+] Daemon mode to auto sync<br>
+[+] Desktop notification support for daemon mode<br>
 [-] Only support desktop<br>
-[-] Manual sync only<br>
 
 # Usage
 Export the following environment variable:
