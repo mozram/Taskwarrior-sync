@@ -51,6 +51,8 @@ COMPLETED_TASK = TASK_FOLDER + "/completed.data"
 PENDING_TASK = TASK_FOLDER + "/pending.data"
 UNDO_TASK = TASK_FOLDER + "/undo.data"
 
+NOTIFY_SEND = "/mnt/c/Apps/notify-send.exe"
+
 # Temporary enumeration of status
 STATUS_NO_CHANGES = 0
 STATUS_LOCAL_NEWER = 1
@@ -260,8 +262,21 @@ def sync():
         else:
             print("No changes...")
         sync_running = False
-    # TODO: Send notification. On WSL2, use https://github.com/vaskovsky/notify-send
+        # Send notification. On WSL2, use https://github.com/vaskovsky/notify-send
+        notify( "Sync successfully" )
+        print("Sync completed")
     # TODO: How to detect running on WSL2 or Native linux
+
+def notify( message ):
+    print("Sending notification...")
+    r = subprocess.run(args=[ NOTIFY_SEND,
+                          "-i",
+                          "info",
+                          "Taskwarrior Sync",
+                          message
+                          ],
+                  universal_newlines = True,
+                  stdout = subprocess.PIPE )
 
 parser = argparse.ArgumentParser(description='Simple Task Warrior task sync. Uses Github as storage and PGP as encryption')
 parser.add_argument('--push', action="store_true", help='Push config and task data to Gist')
@@ -321,6 +336,7 @@ if args.sync:
 
 if args.daemon:
     print("Running in daemon mode...")
+    notify( "Running Taskwarrior Sync in daemon mode" )
     # Initialize inotify to watch config folder
     # Wait for any changes. If changes detected, execute sync above.
     # Repeat
