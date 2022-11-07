@@ -51,7 +51,8 @@ COMPLETED_TASK = TASK_FOLDER + "/completed.data"
 PENDING_TASK = TASK_FOLDER + "/pending.data"
 UNDO_TASK = TASK_FOLDER + "/undo.data"
 
-NOTIFY_SEND = "/mnt/c/Apps/notify-send.exe"
+# Under WSL2 make sure alias notify-send to WSL2 compatible notify caller
+NOTIFY_SEND = "notify-send"
 
 # Temporary enumeration of status
 STATUS_NO_CHANGES = 0
