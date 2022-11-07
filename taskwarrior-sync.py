@@ -16,6 +16,9 @@ import subprocess
 from pathlib import Path
 import argparse
 import re
+import asyncio
+from asyncinotify import Inotify, Mask
+from threading import Timer
 
 ## Check for required variable. Since most of it sensitive, user must set it up
 try:
@@ -220,6 +223,7 @@ def push( localModified ):
     data = encryptConfig()
     packedJson = packJson( data, localModified )
     updateGist(packedJson)
+    print("Push completed")
 
 def pull( remoteGistContent ):
     # Get remote content
@@ -235,10 +239,35 @@ def printDiff( localModified, remoteModified ):
     print("Local copy timestamp: " + str(localTime))
     print("Remote copy timestamp: " + str(remoteTime))
 
+sync_running = False
+
+def sync():
+    global sync_running
+    if sync_running == False:
+        sync_running = True
+        print("Running automatic sync...")
+        # Compare local and remote modified
+        compareStatus, localModified, remoteModified, remoteGistContent = compareModifiedTime()
+        # Do some comparison logic
+        if compareStatus == STATUS_LOCAL_NEWER:
+            # Push
+            print("Pushing config...")
+            push( localModified )
+        elif compareStatus == STATUS_REMOTE_NEWER:
+            # Pull
+            print("Pulling config...")
+            pull( remoteGistContent )
+        else:
+            print("No changes...")
+        sync_running = False
+    # TODO: Send notification. On WSL2, use https://github.com/vaskovsky/notify-send
+    # TODO: How to detect running on WSL2 or Native linux
+
 parser = argparse.ArgumentParser(description='Simple Task Warrior task sync. Uses Github as storage and PGP as encryption')
 parser.add_argument('--push', action="store_true", help='Push config and task data to Gist')
 parser.add_argument('--pull', action="store_true", help='Pull config and task data to Gist')
 parser.add_argument('--sync', action="store_true", help='Sync the config')
+parser.add_argument('--daemon', action="store_true", help='Run as Sync daemon')
 
 args = parser.parse_args()
 
@@ -265,7 +294,6 @@ if args.push:
     if confirmPush:
         push( localModified )
 
-
 if args.pull:
     # print('Pull config')
     confirmPull = False
@@ -289,21 +317,46 @@ if args.pull:
         pull( remoteGistContent )
 
 if args.sync:
-    print("Running automatic sync...")
-    # Compare local and remote modified
-    compareStatus, localModified, remoteModified, remoteGistContent = compareModifiedTime()
-    # Do some comparison logic
-    if compareStatus == STATUS_LOCAL_NEWER:
-        # Push
-        print("Pushing config...")
-        push( localModified )
-    elif compareStatus == STATUS_REMOTE_NEWER:
-        # Pull
-        print("Pulling config...")
-        pull( remoteGistContent )
-    else:
-        print("No changes...")
+    sync()
 
+if args.daemon:
+    print("Running in daemon mode...")
+    # Initialize inotify to watch config folder
+    # Wait for any changes. If changes detected, execute sync above.
+    # Repeat
+    async def main():
+        # Context manager to close the inotify handle after use
+
+        ## Create timer object
+        t = Timer( 2.0, sync )
+
+        with Inotify() as inotify:
+            # Adding the watch can also be done outside of the context manager.
+            # __enter__ doesn't actually do anything except return self.
+            # This returns an asyncinotify.inotify.Watch instance
+            inotify.add_watch( TASK_FOLDER, Mask.MODIFY | Mask.CREATE | Mask.DELETE )
+            # Iterate events forever, yielding them one at a time
+            async for event in inotify:
+                # Events have a helpful __repr__.  They also have a reference to
+                # their Watch instance.
+                print(event)
+
+                # the contained path may or may not be valid UTF-8.  See the note
+                # below
+                # print(repr(event.path))
+
+                # Stop timer
+                t.cancel()
+                # Start timer
+                t = Timer( 2.0, sync )
+                t.start()
+
+    # loop = asyncio.new_event_loop()
+    # asyncio.set_event_loop(loop)
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print('Shutting down daemon...')
 
 # maxMod = getLatestModified()
 # print(maxMod)
