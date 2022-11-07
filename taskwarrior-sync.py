@@ -337,6 +337,8 @@ if args.sync:
 if args.daemon:
     print("Running in daemon mode...")
     notify( "Running Taskwarrior Sync in daemon mode" )
+    # Run first time sync
+    sync()
     # Initialize inotify to watch config folder
     # Wait for any changes. If changes detected, execute sync above.
     # Repeat
