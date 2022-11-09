@@ -39,6 +39,12 @@ except:
     print("Error: Export TASK_USER_ID with your PGP ID")
     exit()
 
+try:
+    NOTIFY_SEND = os.environ['TASK_NOTIFY_SEND']
+except:
+    print("Error: Export TASK_NOTIFY_SEND with your system notify-send")
+    exit()
+
 HOME = str(Path.home()) + "/"
 TASK_FOLDER = HOME + ".task"
 TASK_CONFIG = HOME + ".taskrc"
@@ -50,9 +56,6 @@ BACKLOG_TASK = TASK_FOLDER + "/backlog.data"
 COMPLETED_TASK = TASK_FOLDER + "/completed.data"
 PENDING_TASK = TASK_FOLDER + "/pending.data"
 UNDO_TASK = TASK_FOLDER + "/undo.data"
-
-# Under WSL2 make sure alias notify-send to WSL2 compatible notify caller
-NOTIFY_SEND = "notify-send"
 
 # Temporary enumeration of status
 STATUS_NO_CHANGES = 0
@@ -176,7 +179,7 @@ def getModifiedBacklog( inputJSON ):
 # Get modified epoch for other file
 def getModified( inputString ):
     # Build JSON Object
-    output = re.search("modified:\"(.*)\" status", inputString )
+    output = re.search("modified:\"(.*?)\" ", inputString )
     # print(output[1])
     return int(output[1])
 
