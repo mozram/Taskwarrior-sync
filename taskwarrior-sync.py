@@ -167,13 +167,17 @@ def getLastLine( inputFile ):
 # Only backlog file use proper JSON
 # Return Epoch in integer type
 def getModifiedBacklog( inputJSON ):
-    # Build JSON Object
-    jData = json.loads(inputJSON)
-    # Backlog uses ISO8601 date format, but not quite. Need to append few thing before it compliance
-    modified = jData['modified']
-    modified = modified[:4] + "-" + modified[4:6] + "-" + modified[6:11] + ":" + modified[11:13] + ":" + modified[13:]
-    utc_dt = datetime.strptime( modified, '%Y-%m-%dT%H:%M:%SZ' )
-    timestamp = (utc_dt - datetime(1970, 1, 1)).total_seconds()
+    timestamp = 0
+    try:
+        # Build JSON Object
+        jData = json.loads(inputJSON)
+        # Backlog uses ISO8601 date format, but not quite. Need to append few thing before it compliance
+        modified = jData['modified']
+        modified = modified[:4] + "-" + modified[4:6] + "-" + modified[6:11] + ":" + modified[11:13] + ":" + modified[13:]
+        utc_dt = datetime.strptime( modified, '%Y-%m-%dT%H:%M:%SZ' )
+        timestamp = (utc_dt - datetime(1970, 1, 1)).total_seconds()
+    except:
+        print("Unsupported format. Default timestamp to 0...")
     return int(timestamp)
 
 # Get modified epoch for other file
